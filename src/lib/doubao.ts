@@ -60,7 +60,14 @@ export async function solveWithDoubao(params: {
   });
 
   if (!response.ok) {
-    throw new Error(`Doubao API error: ${response.status}`);
+    const raw = await response.text();
+    const detail = raw.slice(0, 500);
+    if (response.status === 404) {
+      throw new Error(
+        `Doubao API 404. Usually DOUBAO_MODEL is not a valid endpoint/model id for your account. Response: ${detail}`,
+      );
+    }
+    throw new Error(`Doubao API error: ${response.status}. Response: ${detail}`);
   }
 
   const data = (await response.json()) as ChatResponse;
