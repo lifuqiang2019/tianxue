@@ -73,11 +73,12 @@ export async function POST(request: Request) {
 
     const submitRaw = await submitResp.text();
     const submitJson = tryJson(submitRaw);
+    const submitStatusCode = submitResp.headers.get("X-Api-Status-Code") ?? "";
 
-    if (!submitResp.ok || submitJson?.error) {
+    if (!submitResp.ok || submitJson?.error || (submitStatusCode && submitStatusCode !== "20000000")) {
       return NextResponse.json(
         {
-          error: `ASR submit failed: HTTP ${submitResp.status}. Response: ${submitRaw.slice(0, 1200)}`,
+          error: `ASR submit failed: HTTP ${submitResp.status}, X-Api-Status-Code=${submitStatusCode || "N/A"}. Response: ${submitRaw.slice(0, 1200)}`,
         },
         { status: 400 },
       );
@@ -87,7 +88,8 @@ export async function POST(request: Request) {
       getPath(submitJson, "id") ??
       getPath(submitJson, "task_id") ??
       getPath(submitJson, "data.id") ??
-      getPath(submitJson, "result.id");
+      getPath(submitJson, "result.id") ??
+      requestId;
 
     if (!taskId) {
       return NextResponse.json(
@@ -164,6 +166,7 @@ function buildHeaders(params: {
     "Content-Type": "application/json",
     "X-Api-Resource-Id": params.resourceId,
     "X-Api-Request-Id": params.requestId,
+    "X-Api-Sequence": "-1",
   };
 
   if (params.apiKey) {
