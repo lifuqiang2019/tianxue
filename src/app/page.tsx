@@ -108,11 +108,11 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-6 p-6">
-      <h1 className="text-2xl font-semibold">Tianxue Listening Assistant (MVP)</h1>
+      <h1 className="text-2xl font-semibold">天学网听力助手</h1>
 
       <form className="flex flex-col gap-4" onSubmit={submitTask}>
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Question Text</span>
+          <span className="text-sm font-medium">题目文本</span>
           <textarea
             className="min-h-40 rounded border p-3"
             value={questionText}
@@ -121,7 +121,7 @@ export default function Home() {
         </label>
 
         <label className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Transcript Text (ASR output)</span>
+          <span className="text-sm font-medium">听力转写文本（ASR结果）</span>
           <textarea
             className="min-h-40 rounded border p-3"
             value={transcript}
@@ -130,16 +130,29 @@ export default function Home() {
         </label>
 
         <section className="rounded border p-4">
-          <p className="mb-3 text-sm font-medium">ASR (Upload File or URL)</p>
+          <p className="mb-3 text-sm font-medium">语音识别（上传文件或音频链接）</p>
           <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <label
+                htmlFor="audio-file-input"
+                className="inline-flex cursor-pointer items-center rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                选择音频文件
+              </label>
+              <span className="text-sm text-zinc-600">
+                {audioFile ? audioFile.name : "未选择文件"}
+              </span>
+            </div>
             <input
+              id="audio-file-input"
               type="file"
               accept="audio/*"
+              className="hidden"
               onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)}
             />
             <input
               className="rounded border p-2"
-              placeholder="https://example.com/audio.mp3"
+              placeholder="请输入音频URL，例如：https://example.com/audio.mp3"
               value={audioUrl}
               onChange={(e) => setAudioUrl(e.target.value)}
             />
@@ -149,7 +162,7 @@ export default function Home() {
               onClick={runAsr}
               disabled={asrLoading}
             >
-              {asrLoading ? "ASR Running..." : "Parse ASR to Transcript"}
+              {asrLoading ? "识别中..." : "开始ASR并填入转写文本"}
             </button>
           </div>
         </section>
@@ -159,18 +172,18 @@ export default function Home() {
           type="submit"
           disabled={!canSubmit || loading}
         >
-          {loading ? "Running..." : "Create Task"}
+          {loading ? "处理中..." : "开始答题"}
         </button>
       </form>
 
       <section className="rounded border p-4">
-        <p>Task ID: {taskId || "-"}</p>
-        <p>Status: {status}</p>
-        {error ? <p className="text-red-600">Error: {error}</p> : null}
+        <p>任务ID：{taskId || "-"}</p>
+        <p>状态：{status}</p>
+        {error ? <p className="text-red-600">错误：{error}</p> : null}
       </section>
 
       <section className="rounded border p-4">
-        <h2 className="mb-2 text-lg font-medium">Result</h2>
+        <h2 className="mb-2 text-lg font-medium">结果</h2>
         <pre className="overflow-auto text-sm">{JSON.stringify(result, null, 2)}</pre>
       </section>
     </main>
