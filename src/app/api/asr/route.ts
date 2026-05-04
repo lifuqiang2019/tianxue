@@ -113,13 +113,13 @@ export async function POST(request: Request) {
 }
 
 async function pollAsrResult(params: { taskId: string; headers: HeadersInit }) {
-  for (let i = 0; i < 24; i += 1) {
+  for (let i = 0; i < 90; i += 1) {
     await delay(1000);
 
     const queryResp = await fetch(QUERY_URL, {
       method: "POST",
       headers: params.headers,
-      body: JSON.stringify({ id: params.taskId }),
+      body: JSON.stringify({ id: params.taskId, task_id: params.taskId }),
     });
 
     const raw = await queryResp.text();
@@ -130,15 +130,20 @@ async function pollAsrResult(params: { taskId: string; headers: HeadersInit }) {
     }
 
     const status = String(getPath(json, "status") ?? getPath(json, "data.status") ?? "").toLowerCase();
+    const statusCode = String(getPath(json, "code") ?? getPath(json, "header.code") ?? "");
     const text =
       String(getPath(json, "text") ?? "") ||
       String(getPath(json, "result.text") ?? "") ||
       String(getPath(json, "data.text") ?? "") ||
       String(getPath(json, "data.result.text") ?? "") ||
+      String(getPath(json, "payload.result.text") ?? "") ||
       readUtterances(json) ||
       "";
 
-    if (text && (status.includes("success") || status.includes("finished") || status === "")) {
+    if (
+      text &&
+      (status.includes("success") || status.includes("finished") || status === "" || statusCode === "20000000")
+    ) {
       return text;
     }
 
@@ -152,7 +157,7 @@ async function pollAsrResult(params: { taskId: string; headers: HeadersInit }) {
     }
   }
 
-  throw new Error("ASR query timeout. Please retry.");
+  throw new Error("ASR query timeout (90s). Please retry with file upload or a direct downloadable audio URL.");
 }
 
 function buildHeaders(params: {
