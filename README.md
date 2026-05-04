@@ -14,6 +14,7 @@ A Node/TypeScript MVP for listening-question auto answering.
 
 ```bash
 npm install
+cp .env.example .env.local
 npm run dev
 ```
 
@@ -21,16 +22,12 @@ Open `http://localhost:3000`.
 
 ## Environment Variables
 
-Create `.env.local`:
+- `DATABASE_URL` (PostgreSQL)
+- `DOUBAO_API_KEY`
+- `DOUBAO_MODEL`
+- `DOUBAO_BASE_URL` (optional)
 
-```bash
-DOUBAO_API_KEY=your_api_key
-DOUBAO_MODEL=your_model_id
-# optional
-DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-```
-
-If `DOUBAO_API_KEY` or `DOUBAO_MODEL` is missing, the app returns fallback answers for smoke test.
+`.env.local` is ignored by git.
 
 ## API Examples
 
@@ -62,6 +59,7 @@ vercel --prod
 
 Then set env vars in Vercel project settings:
 
+- `DATABASE_URL`
 - `DOUBAO_API_KEY`
 - `DOUBAO_MODEL`
 - `DOUBAO_BASE_URL` (optional)
