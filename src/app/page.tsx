@@ -7,6 +7,8 @@ type TaskStatus = "pending" | "processing" | "done" | "failed";
 type TaskResponse = {
   taskId: string;
   status: TaskStatus;
+  answers?: AnswerItem[];
+  error?: string | null;
 };
 
 type AnswerItem = {
@@ -47,14 +49,20 @@ export default function Home() {
         body: formData,
       });
 
-      const data = (await resp.json()) as TaskResponse & { error?: string };
+      const data = (await resp.json()) as TaskResponse;
       if (!resp.ok) {
         throw new Error(data.error || "Failed to create task");
       }
 
       setTaskId(data.taskId);
       setStatus(data.status);
-      await pollStatus(data.taskId);
+      if (data.status === "done") {
+        setResult(data.answers ?? []);
+      } else if (data.status === "failed") {
+        throw new Error(data.error || "Task failed");
+      } else {
+        throw new Error("Unexpected task status");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
@@ -62,44 +70,6 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function pollStatus(id: string) {
-    for (let i = 0; i < 30; i += 1) {
-      await delay(1000);
-      const resp = await fetch(`/api/tasks/${id}`);
-      const data = (await resp.json()) as {
-        status: TaskStatus;
-        error?: string;
-      };
-
-      if (!resp.ok) {
-        throw new Error(data.error || "Failed to query task status");
-      }
-
-      setStatus(data.status);
-
-      if (data.status === "done") {
-        const resultResp = await fetch(`/api/tasks/${id}/result`);
-        const resultData = (await resultResp.json()) as {
-          answers?: AnswerItem[];
-          error?: string;
-        };
-
-        if (!resultResp.ok) {
-          throw new Error(resultData.error || "Failed to query result");
-        }
-
-        setResult(resultData.answers ?? []);
-        return;
-      }
-
-      if (data.status === "failed") {
-        throw new Error(data.error || "Task failed");
-      }
-    }
-
-    throw new Error("Polling timeout");
   }
 
   return (
@@ -146,8 +116,4 @@ export default function Home() {
       </section>
     </main>
   );
-}
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

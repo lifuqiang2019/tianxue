@@ -30,7 +30,16 @@ export async function POST(request: Request) {
   const store = getTaskStore();
   store.set(task.id, task);
 
-  void runTask(task.id);
+  await runTask(task.id);
+  const finalTask = store.get(task.id);
+  if (!finalTask) {
+    return NextResponse.json({ error: "Task not found after execution" }, { status: 500 });
+  }
 
-  return NextResponse.json({ taskId: task.id, status: task.status });
+  return NextResponse.json({
+    taskId: finalTask.id,
+    status: finalTask.status,
+    answers: finalTask.result,
+    error: finalTask.error ?? null,
+  });
 }
