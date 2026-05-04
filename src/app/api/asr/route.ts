@@ -6,6 +6,11 @@ export const runtime = "nodejs";
 const SUBMIT_URL = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit";
 const QUERY_URL = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/query";
 const DEFAULT_RESOURCE_ID = "volc.seedasr.auc";
+const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 300_000;
+const DOWNLOAD_RETRY_COUNT = 2;
+const POLL_MAX_ATTEMPTS = 180;
+const POLL_INTERVAL_MS = 1000;
 
 export async function POST(request: Request) {
   try {
@@ -45,11 +50,19 @@ export async function POST(request: Request) {
       if (!parsedUrl) {
         return NextResponse.json({ error: "audioUrl must be a valid http/https URL" }, { status: 400 });
       }
-
-      audioData = {
-        url: parsedUrl,
-        format: extToFormat(parsedUrl) || "mp3",
-      };
+      // Prefer server-download then upload-bytes, but fall back to direct URL mode.
+      try {
+        const downloaded = await downloadAudioWithRetry(parsedUrl);
+        audioData = {
+          data: downloaded.bytes.toString("base64"),
+          format: downloaded.format,
+        };
+      } catch {
+        audioData = {
+          url: parsedUrl,
+          format: extToFormat(parsedUrl) || "mp3",
+        };
+      }
     }
 
     const requestId = randomUUID();
@@ -113,8 +126,8 @@ export async function POST(request: Request) {
 }
 
 async function pollAsrResult(params: { taskId: string; headers: HeadersInit }) {
-  for (let i = 0; i < 90; i += 1) {
-    await delay(1000);
+  for (let i = 0; i < POLL_MAX_ATTEMPTS; i += 1) {
+    await delay(POLL_INTERVAL_MS);
 
     const queryResp = await fetch(QUERY_URL, {
       method: "POST",
@@ -157,7 +170,9 @@ async function pollAsrResult(params: { taskId: string; headers: HeadersInit }) {
     }
   }
 
-  throw new Error("ASR query timeout (90s). Please retry with file upload or a direct downloadable audio URL.");
+  throw new Error(
+    `ASR query timeout (${Math.floor((POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS) / 1000)}s). Please retry with file upload or a direct downloadable audio URL.`,
+  );
 }
 
 function buildHeaders(params: {
@@ -235,6 +250,78 @@ function extToFormat(nameOrUrl: string) {
   if (lowered.endsWith(".flac")) return "flac";
   if (lowered.endsWith(".mp3")) return "mp3";
   return "";
+}
+
+function mimeToFormat(contentType: string) {
+  const lowered = contentType.toLowerCase();
+  if (lowered.includes("audio/wav") || lowered.includes("audio/x-wav")) return "wav";
+  if (lowered.includes("audio/mpeg") || lowered.includes("audio/mp3")) return "mp3";
+  if (lowered.includes("audio/mp4") || lowered.includes("audio/x-m4a")) return "m4a";
+  if (lowered.includes("audio/aac")) return "aac";
+  if (lowered.includes("audio/ogg")) return "ogg";
+  if (lowered.includes("audio/flac") || lowered.includes("audio/x-flac")) return "flac";
+  return "";
+}
+
+async function downloadAudio(url: string): Promise<{ bytes: Buffer; format: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+
+  try {
+    const resp = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        // Some CDNs reject requests without user-agent.
+        "User-Agent": "Mozilla/5.0 (compatible; TianxueASR/1.0)",
+      },
+    });
+
+    if (!resp.ok) {
+      throw new Error(`audioUrl fetch failed: HTTP ${resp.status}`);
+    }
+
+    const lenHeader = resp.headers.get("content-length");
+    if (lenHeader) {
+      const length = Number(lenHeader);
+      if (Number.isFinite(length) && length > MAX_AUDIO_BYTES) {
+        throw new Error(`audioUrl file too large (${length} bytes), max ${MAX_AUDIO_BYTES} bytes`);
+      }
+    }
+
+    const contentType = resp.headers.get("content-type") ?? "";
+    const bytes = Buffer.from(await resp.arrayBuffer());
+    if (!bytes.length) {
+      throw new Error("audioUrl returned empty body");
+    }
+    if (bytes.length > MAX_AUDIO_BYTES) {
+      throw new Error(`audioUrl file too large (${bytes.length} bytes), max ${MAX_AUDIO_BYTES} bytes`);
+    }
+
+    const format = extToFormat(url) || mimeToFormat(contentType) || "mp3";
+    return { bytes, format };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to download audioUrl: ${message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function downloadAudioWithRetry(url: string) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= DOWNLOAD_RETRY_COUNT; attempt += 1) {
+    try {
+      return await downloadAudio(url);
+    } catch (error) {
+      lastError = error;
+      if (attempt < DOWNLOAD_RETRY_COUNT) {
+        await delay(1200 * attempt);
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 function delay(ms: number) {

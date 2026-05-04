@@ -18,6 +18,12 @@ type AnswerItem = {
   evidence: string;
 };
 
+type ParsedResponse<T> = {
+  data: T | null;
+  raw: string;
+  isJson: boolean;
+};
+
 export default function Home() {
   const [questionText, setQuestionText] = useState("1. What does the girl want to buy?\nA. A book\nB. A bike\nC. A pen");
   const [transcript, setTranscript] = useState(
@@ -33,6 +39,10 @@ export default function Home() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
 
   const canSubmit = useMemo(() => questionText.trim() && transcript.trim(), [questionText, transcript]);
+  const extractedAnswers = useMemo(
+    () => (result ?? []).map((item) => `Q${item.questionId}: ${item.answer}`),
+    [result],
+  );
 
   async function submitTask(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -51,11 +61,14 @@ export default function Home() {
         method: "POST",
         body: formData,
       });
-
-      const data = (await resp.json()) as TaskResponse;
+      const { data, raw, isJson } = await parseResponseBody<TaskResponse>(resp);
       if (!resp.ok) {
-        throw new Error(data.error || "Failed to create task");
+        throw new Error(
+          data?.error ||
+            formatUnexpectedApiResponse("Failed to create task", resp.status, raw, isJson),
+        );
       }
+      if (!data) throw new Error(formatUnexpectedApiResponse("Invalid task response", resp.status, raw, false));
 
       setTaskId(data.taskId);
       setStatus(data.status);
@@ -85,17 +98,30 @@ export default function Home() {
     setError("");
     try {
       const formData = new FormData();
-      if (audioFile) formData.set("file", audioFile);
-      if (audioUrl.trim()) formData.set("audioUrl", audioUrl.trim());
+      if (audioFile) {
+        formData.set("file", audioFile);
+      } else if (audioUrl.trim()) {
+        try {
+          const downloadedFile = await downloadAudioFromUrl(audioUrl.trim());
+          formData.set("file", downloadedFile);
+          setAudioFile(downloadedFile);
+        } catch {
+          // Fallback path when browser-side download is blocked by CORS or network policy.
+          formData.set("audioUrl", audioUrl.trim());
+        }
+      }
 
       const resp = await fetch("/api/asr", {
         method: "POST",
         body: formData,
       });
-      const data = (await resp.json()) as { text?: string; error?: string };
+      const { data, raw, isJson } = await parseResponseBody<{ text?: string; error?: string }>(resp);
       if (!resp.ok) {
-        throw new Error(data.error || "ASR request failed");
+        throw new Error(
+          data?.error || formatUnexpectedApiResponse("ASR request failed", resp.status, raw, isJson),
+        );
       }
+      if (!data) throw new Error(formatUnexpectedApiResponse("Invalid ASR response", resp.status, raw, false));
 
       setTranscript(data.text ?? "");
     } catch (err) {
@@ -184,8 +210,69 @@ export default function Home() {
 
       <section className="rounded border p-4">
         <h2 className="mb-2 text-lg font-medium">结果</h2>
+        <div className="mb-3 rounded bg-zinc-50 p-3">
+          <p className="mb-2 text-sm font-medium">答案提取（answer）</p>
+          {extractedAnswers.length ? (
+            <div className="space-y-1 text-sm">
+              {extractedAnswers.map((text) => (
+                <p key={text}>{text}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">暂无答案</p>
+          )}
+        </div>
+        <p className="mb-2 text-sm font-medium">原始结果</p>
         <pre className="overflow-auto text-sm">{JSON.stringify(result, null, 2)}</pre>
       </section>
     </main>
   );
+}
+
+async function parseResponseBody<T>(resp: Response): Promise<ParsedResponse<T>> {
+  const raw = await resp.text();
+  if (!raw) return { data: null, raw: "", isJson: false };
+  try {
+    return { data: JSON.parse(raw) as T, raw, isJson: true };
+  } catch {
+    return { data: null, raw, isJson: false };
+  }
+}
+
+function formatUnexpectedApiResponse(prefix: string, status: number, raw: string, isJson: boolean) {
+  if (isJson) return `${prefix} (HTTP ${status})`;
+  const snippet = sanitizeSnippet(raw);
+  return `${prefix} (HTTP ${status}). Server returned non-JSON response: ${snippet}`;
+}
+
+function sanitizeSnippet(raw: string) {
+  const collapsed = raw.replace(/\s+/g, " ").trim().slice(0, 160);
+  if (!collapsed) return "<empty>";
+  return collapsed;
+}
+
+async function downloadAudioFromUrl(url: string) {
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Browser download failed: HTTP ${resp.status}`);
+  }
+  const blob = await resp.blob();
+  if (!blob.size) {
+    throw new Error("Browser download failed: empty file");
+  }
+
+  const fileName = inferFileNameFromUrl(url);
+  const mime = blob.type || "audio/mpeg";
+  return new File([blob], fileName, { type: mime });
+}
+
+function inferFileNameFromUrl(url: string) {
+  try {
+    const u = new URL(url);
+    const name = u.pathname.split("/").filter(Boolean).pop();
+    if (name) return decodeURIComponent(name);
+    return "audio-from-url.mp3";
+  } catch {
+    return "audio-from-url.mp3";
+  }
 }
