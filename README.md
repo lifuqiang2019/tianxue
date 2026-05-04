@@ -25,6 +25,7 @@ Open `http://localhost:3000`.
 - `DATABASE_URL` (PostgreSQL)
 - `DOUBAO_API_KEY`
 - `DOUBAO_MODEL`
+- `DOUBAO_ASR_MODEL`
 - `DOUBAO_BASE_URL` (optional)
 
 `.env.local` is ignored by git.
