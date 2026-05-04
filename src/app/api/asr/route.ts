@@ -9,7 +9,7 @@ const DEFAULT_RESOURCE_ID = "volc.seedasr.auc";
 
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.DOUBAO_ASR_API_KEY ?? process.env.DOUBAO_API_KEY;
+    const apiKey = process.env.DOUBAO_ASR_API_KEY;
     const appId = process.env.DOUBAO_ASR_APP_ID;
     const accessToken = process.env.DOUBAO_ASR_ACCESS_TOKEN;
     const resourceId = process.env.DOUBAO_ASR_RESOURCE_ID ?? DEFAULT_RESOURCE_ID;
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Missing ASR auth. Set DOUBAO_ASR_API_KEY or DOUBAO_ASR_APP_ID + DOUBAO_ASR_ACCESS_TOKEN.",
+            "Missing ASR auth. Set DOUBAO_ASR_API_KEY or DOUBAO_ASR_APP_ID + DOUBAO_ASR_ACCESS_TOKEN. (DOUBAO_API_KEY is not used for ASR)",
         },
         { status: 400 },
       );
