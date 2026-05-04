@@ -25,7 +25,9 @@ Open `http://localhost:3000`.
 - `DATABASE_URL` (PostgreSQL)
 - `DOUBAO_API_KEY`
 - `DOUBAO_MODEL`
-- `DOUBAO_ASR_MODEL`
+- `DOUBAO_ASR_API_KEY` (preferred for ASR)
+- `DOUBAO_ASR_APP_ID` + `DOUBAO_ASR_ACCESS_TOKEN` (ASR fallback auth)
+- `DOUBAO_ASR_RESOURCE_ID` (default `volc.seedasr.auc`)
 - `DOUBAO_BASE_URL` (optional)
 
 `.env.local` is ignored by git.
@@ -63,4 +65,8 @@ Then set env vars in Vercel project settings:
 - `DATABASE_URL`
 - `DOUBAO_API_KEY`
 - `DOUBAO_MODEL`
+- `DOUBAO_ASR_API_KEY`
+- `DOUBAO_ASR_APP_ID`
+- `DOUBAO_ASR_ACCESS_TOKEN`
+- `DOUBAO_ASR_RESOURCE_ID` (optional)
 - `DOUBAO_BASE_URL` (optional)
