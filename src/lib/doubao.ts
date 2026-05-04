@@ -51,7 +51,6 @@ export async function solveWithDoubao(params: {
     body: JSON.stringify({
       model,
       temperature: 0,
-      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -78,7 +77,7 @@ export async function solveWithDoubao(params: {
 
   let parsed: { answers?: AnswerItem[] };
   try {
-    parsed = JSON.parse(content) as { answers?: AnswerItem[] };
+    parsed = JSON.parse(extractJsonObject(content)) as { answers?: AnswerItem[] };
   } catch {
     throw new Error("Doubao content is not valid JSON");
   }
@@ -104,4 +103,24 @@ function clampConfidence(value: number) {
   if (value < 0) return 0;
   if (value > 1) return 1;
   return value;
+}
+
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    return trimmed.slice(first, last + 1);
+  }
+
+  return trimmed;
 }
